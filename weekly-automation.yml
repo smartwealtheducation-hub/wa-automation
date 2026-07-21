@@ -1,0 +1,73 @@
+name: Weekly WA Automation
+
+on:
+  schedule:
+    # Every Monday 09:00 UTC - adjust as you like (cron is UTC)
+    - cron: "0 9 * * 1"
+  workflow_dispatch: {} # lets you trigger it manually from the Actions tab
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+
+      - name: Run content agent (writes article + generates/uploads image)
+        run: npm run content
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+          WA_AFFILIATE_LINK: ${{ secrets.WA_AFFILIATE_LINK }}
+          SITE_NICHE: ${{ secrets.SITE_NICHE }}
+
+      - name: Run Facebook agent
+        run: npm run social
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+
+      - name: Run LinkedIn agent
+        run: npm run linkedin
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
+          LINKEDIN_MEMBER_URN: ${{ secrets.LINKEDIN_MEMBER_URN }}
+
+      - name: Run Instagram agent
+        run: npm run instagram
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          IG_BUSINESS_ACCOUNT_ID: ${{ secrets.IG_BUSINESS_ACCOUNT_ID }}
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
+
+      - name: Run Pinterest agent
+        run: npm run pinterest
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PINTEREST_ACCESS_TOKEN: ${{ secrets.PINTEREST_ACCESS_TOKEN }}
+          PINTEREST_BOARD_ID: ${{ secrets.PINTEREST_BOARD_ID }}
+
+      - name: Run email agent
+        run: npm run email
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          KIT_API_KEY: ${{ secrets.KIT_API_KEY }}
+          WA_AFFILIATE_LINK: ${{ secrets.WA_AFFILIATE_LINK }}
+          SITE_NICHE: ${{ secrets.SITE_NICHE }}
+
+      - name: Commit used-topics.json
+        run: |
+          git config user.name "automation-bot"
+          git config user.email "actions@github.com"
+          git add used-topics.json latest-post.json || true
+          git diff --cached --quiet || git commit -m "Update automation state [skip ci]"
+          git push
