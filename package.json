@@ -6,11 +6,10 @@
   "scripts": {
     "content": "node agents/content-agent.js",
     "social": "node agents/social-agent.js",
-    "linkedin": "node agents/linkedin-agent.js",
     "instagram": "node agents/instagram-agent.js",
     "pinterest": "node agents/pinterest-agent.js",
     "email": "node agents/email-agent.js",
-    "all": "npm run content && npm run social && npm run linkedin && npm run instagram && npm run pinterest && npm run email"
+    "all": "npm run content && npm run social && npm run instagram && npm run pinterest && npm run email"
   },
   "dependencies": {
     "node-fetch": "^3.3.2"
