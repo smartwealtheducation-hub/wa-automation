@@ -8,7 +8,7 @@
 // weekly agents across separate days instead of running them all at once.
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const MODEL = "gemini-2.5-flash-lite";
+const MODEL = "gemini-3.5-flash-lite";
 
 export async function askLLM(systemPrompt, userPrompt, maxTokens = 2000) {
   const res = await fetch(
