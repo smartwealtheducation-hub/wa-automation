@@ -1,12 +1,14 @@
 // Generates and uploads images - completely free via Pollinations.ai (no
-// account, no API key, no cost). Trade-off vs a paid provider: no uptime
-// guarantee and lower/variable rate limits (roughly one request per ~15
-// seconds on anonymous use) - fine for a weekly job, not for high-volume use.
+// account, no API key, no cost). Uses the "flux" model specifically, which
+// gives noticeably sharper, higher-quality results than the default model.
+// Trade-off vs a paid provider: no uptime guarantee and lower/variable rate
+// limits (roughly one request per ~15 seconds on anonymous use) - fine for
+// a weekly job, not for high-volume use.
 const { WP_SITE_URL, WP_USERNAME, WP_APP_PASSWORD } = process.env;
 
 async function generateImage(prompt, width = 1024, height = 1024) {
   const encoded = encodeURIComponent(prompt);
-  const url = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&nologo=true`;
+  const url = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&nologo=true&model=flux`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Image generation failed ${res.status}`);
