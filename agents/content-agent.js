@@ -1,6 +1,6 @@
 import fs from "fs";
 import { askLLM, cleanJson } from "./llm-client.js";
-import { createArticleImage } from "./image-agent.js";
+import { createArticleImage, createInlineImage } from "./image-agent.js";
 
 const {
   WP_SITE_URL,
@@ -24,7 +24,6 @@ function saveUsedTopics(topics) {
   fs.writeFileSync(USED_TOPICS_FILE, JSON.stringify(topics, null, 2));
 }
 
-// Step 1: pick a fresh, low-competition beginner topic
 async function pickTopic(usedTopics) {
   const prompt = `You are a keyword researcher for a website in this niche: "${SITE_NICHE}".
 
@@ -47,7 +46,6 @@ Respond ONLY with JSON, no preamble, no code fences:
   return JSON.parse(cleanJson(raw));
 }
 
-// Step 2: write the full article
 async function writeArticle(topicData) {
   const prompt = `Write a complete, genuinely helpful blog post for total beginners.
 
@@ -57,9 +55,10 @@ Topic: ${topicData.topic}
 Site niche: ${SITE_NICHE}
 
 Requirements:
-- 900-1200 words, real practical value, not fluff
-- Use the target keyword naturally 3-5 times, including in the first paragraph
-- Use clear H2 subheadings (as HTML <h2> tags)
+- 1300-1600 words (target around 1500), real practical value, not fluff -
+  this length matters for SEO, so do not undershoot it
+- Use the target keyword naturally 4-6 times, including in the first paragraph
+- Use clear H2 subheadings (as HTML <h2> tags) - aim for 5-7 sections given the length
 - Plain, friendly, beginner-safe tone
 - Affiliate link placement (IMPORTANT - do this naturally, not as a dump at the end):
   - Place ONE mention of ${WA_AFFILIATE_LINK} at the point in the article where a
@@ -72,6 +71,9 @@ Requirements:
   disclosure line in a <p><em> tag (required for legal compliance - do not omit
   or alter it): "This post contains an affiliate link. If you sign up through it,
   I may earn a commission at no extra cost to you."
+- Insert the literal marker [IMAGE_1] on its own line roughly one-third of the
+  way through the article, and [IMAGE_2] on its own line roughly two-thirds of
+  the way through, at natural section breaks where an illustration would help.
 - Include a short meta description (150-160 characters, compelling, includes the
   target keyword) - return this separately in the JSON, not in the body.
 - Suggest 2-3 internal link anchor text ideas (phrases in the article that could
@@ -82,17 +84,24 @@ Requirements:
 - Do not include the title in the body (WordPress will add it separately)
 
 Respond ONLY with JSON, no preamble, no code fences:
-{"body_html": "...", "meta_description": "...", "internal_link_ideas": ["...", "..."]}`;
+{
+  "body_html": "...",
+  "meta_description": "...",
+  "internal_link_ideas": ["...", "..."],
+  "image_prompts": {
+    "image_1": "short descriptive scene for the image at [IMAGE_1], no text/words in the image",
+    "image_2": "short descriptive scene for the image at [IMAGE_2], no text/words in the image"
+  }
+}`;
 
   const raw = await askLLM(
     "You are an experienced content writer who writes clear, honest, SEO-aware, legally compliant articles for beginners. Respond only with valid JSON.",
     prompt,
-    3500
+    5000
   );
   return JSON.parse(cleanJson(raw));
 }
 
-// Step 3: publish to WordPress
 async function publishToWordPress(title, contentHtml, metaDescription, featuredMediaId) {
   const auth = Buffer.from(`${WP_USERNAME}:${WP_APP_PASSWORD}`).toString(
     "base64"
@@ -107,9 +116,9 @@ async function publishToWordPress(title, contentHtml, metaDescription, featuredM
     body: JSON.stringify({
       title,
       content: contentHtml,
-      excerpt: metaDescription, // used by most SEO plugins as the meta description
+      excerpt: metaDescription,
       featured_media: featuredMediaId,
-      status: "publish", // fully unattended, as requested
+      status: "publish",
     }),
   });
 
@@ -121,6 +130,14 @@ async function publishToWordPress(title, contentHtml, metaDescription, featuredM
   return await res.json();
 }
 
+function insertInlineImages(bodyHtml, image1Url, image1Alt, image2Url, image2Alt) {
+  const img1Tag = `<img src="${image1Url}" alt="${image1Alt}" style="max-width:100%;height:auto;" />`;
+  const img2Tag = `<img src="${image2Url}" alt="${image2Alt}" style="max-width:100%;height:auto;" />`;
+  let body = bodyHtml.replace("[IMAGE_1]", img1Tag);
+  body = body.replace("[IMAGE_2]", img2Tag);
+  return body;
+}
+
 async function main() {
   const usedTopics = loadUsedTopics();
 
@@ -130,23 +147,42 @@ async function main() {
   console.log("Writing article:", topicData.title);
   const article = await writeArticle(topicData);
 
-  console.log("Generating header image...");
-  const image = await createArticleImage(topicData.title, topicData.topic);
+  console.log("Generating thumbnail image...");
+  const thumbnail = await createArticleImage(topicData.title, topicData.topic);
 
-  const bodyWithImage = `<img src="${image.url}" alt="${topicData.title}" style="width:100%;height:auto;" />\n${article.body_html}`;
+  console.log("Generating in-article image 1...");
+  const inline1 = await createInlineImage(
+    topicData.title,
+    article.image_prompts.image_1,
+    1
+  );
+
+  console.log("Generating in-article image 2...");
+  const inline2 = await createInlineImage(
+    topicData.title,
+    article.image_prompts.image_2,
+    2
+  );
+
+  const finalBody = insertInlineImages(
+    article.body_html,
+    inline1.url,
+    article.image_prompts.image_1,
+    inline2.url,
+    article.image_prompts.image_2
+  );
 
   console.log("Publishing to WordPress...");
   const post = await publishToWordPress(
     topicData.title,
-    bodyWithImage,
+    finalBody,
     article.meta_description,
-    image.id
+    thumbnail.id
   );
 
   usedTopics.push({ title: topicData.title, date: new Date().toISOString() });
   saveUsedTopics(usedTopics);
 
-  // Pass data to the social agents via a shared file (same CI run)
   fs.writeFileSync(
     new URL("../latest-post.json", import.meta.url),
     JSON.stringify(
@@ -156,7 +192,7 @@ async function main() {
         excerpt: topicData.topic,
         meta_description: article.meta_description,
         internal_link_ideas: article.internal_link_ideas,
-        image_url: image.url,
+        image_url: thumbnail.url,
       },
       null,
       2
