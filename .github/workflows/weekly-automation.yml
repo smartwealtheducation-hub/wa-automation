@@ -25,6 +25,7 @@ jobs:
           WP_USERNAME: ${{ secrets.WP_USERNAME }}
           WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
           WA_AFFILIATE_LINK: ${{ secrets.WA_AFFILIATE_LINK }}
+          POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
           SITE_NICHE: ${{ secrets.SITE_NICHE }}
       - name: Run Facebook agent
         run: npm run social
