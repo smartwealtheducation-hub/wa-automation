@@ -84,6 +84,45 @@ Respond ONLY with JSON, no preamble, no code fences:
   return match ? match.id : null;
 }
 
+// Gets the ID of an existing WordPress tag, or creates it if it doesn't
+// exist yet. Unlike categories (pick from existing only), tags are allowed
+// to be created fresh each time since trending/viral tags naturally change
+// article to article.
+async function getOrCreateTag(name) {
+  const res = await fetch(`${WP_SITE_URL}/wp-json/wp/v2/tags`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: wpAuthHeader(),
+    },
+    body: JSON.stringify({ name }),
+  });
+
+  if (res.ok) {
+    const data = await res.json();
+    return data.id;
+  }
+
+  // WordPress returns 400 term_exists (with the existing term's id) if the
+  // tag is already there - reuse it instead of failing.
+  const errData = await res.json().catch(() => null);
+  if (errData?.code === "term_exists" && errData?.data?.term_id) {
+    return errData.data.term_id;
+  }
+
+  console.log(`Could not create/find tag "${name}", skipping it.`);
+  return null;
+}
+
+async function resolveTags(tagNames) {
+  const ids = [];
+  for (const name of tagNames || []) {
+    const id = await getOrCreateTag(name);
+    if (id) ids.push(id);
+  }
+  return ids;
+}
+
 async function pickTopic(usedTopics) {
   const prompt = `You are a keyword researcher for a website in this niche: "${SITE_NICHE}".
 
@@ -127,10 +166,12 @@ Requirements:
     concept that WA's training covers, not before you've given real value first.
   - Optionally one more low-key mention in a closing paragraph if it fits naturally.
   - Do NOT front-load the link in the intro, and do not repeat it more than twice.
-- At the very top of the body, before any other content, include this exact
-  disclosure line in a <p><em> tag (required for legal compliance - do not omit
-  or alter it): "This post contains an affiliate link. If you sign up through it,
-  I may earn a commission at no extra cost to you."
+- Disclosure placement (IMPORTANT - this is different from before): do NOT put
+  the disclosure at the very top of the article. Instead, place this exact
+  disclosure line in a <p><em> tag immediately ABOVE the <h2> heading of
+  whichever section contains the ${WA_AFFILIATE_LINK} mention - directly
+  before that heading, nowhere else: "This post contains an affiliate link.
+  If you sign up through it, I may earn a commission at no extra cost to you."
 - Insert the literal marker [IMAGE_1] on its own line roughly one-third of the
   way through the article, and [IMAGE_2] on its own line roughly two-thirds of
   the way through, at natural section breaks where an illustration would help.
@@ -139,6 +180,9 @@ Requirements:
 - Suggest 2-3 internal link anchor text ideas (phrases in the article that could
   later link to other posts on the same site) - return separately, do not create
   fake links in the body.
+- Suggest exactly 3 trending, viral-style tags related to this article's topic
+  (short phrases people actually search/follow, not generic single words) -
+  return separately, do not put these in the body.
 - Output valid HTML for the WordPress post body (paragraphs in <p>, headings in <h2>).
   Do not include <html>, <head>, or <body> tags - just the content HTML.
 - Do not include the title in the body (WordPress will add it separately)
@@ -148,6 +192,7 @@ Respond ONLY with JSON, no preamble, no code fences:
   "body_html": "...",
   "meta_description": "...",
   "internal_link_ideas": ["...", "..."],
+  "tags": ["...", "...", "..."],
   "image_prompts": {
     "image_1": "short descriptive scene for the image at [IMAGE_1], no text/words in the image",
     "image_2": "short descriptive scene for the image at [IMAGE_2], no text/words in the image"
@@ -162,7 +207,7 @@ Respond ONLY with JSON, no preamble, no code fences:
   return JSON.parse(cleanJson(raw));
 }
 
-async function publishToWordPress(title, contentHtml, metaDescription, featuredMediaId, categoryId) {
+async function publishToWordPress(title, contentHtml, metaDescription, featuredMediaId, categoryId, tagIds) {
   const payload = {
     title,
     content: contentHtml,
@@ -170,9 +215,8 @@ async function publishToWordPress(title, contentHtml, metaDescription, featuredM
     featured_media: featuredMediaId,
     status: "publish",
   };
-  if (categoryId) {
-    payload.categories = [categoryId];
-  }
+  if (categoryId) payload.categories = [categoryId];
+  if (tagIds && tagIds.length) payload.tags = tagIds;
 
   const res = await fetch(`${WP_SITE_URL}/wp-json/wp/v2/posts`, {
     method: "POST",
@@ -219,6 +263,9 @@ async function main() {
   console.log("Writing article:", topicData.title);
   const article = await writeArticle(topicData);
 
+  console.log("Resolving tags:", article.tags?.join(", "));
+  const tagIds = await resolveTags(article.tags);
+
   console.log("Generating thumbnail image...");
   const thumbnail = await createArticleImage(topicData.title, topicData.topic);
 
@@ -256,7 +303,8 @@ async function main() {
     finalBody,
     article.meta_description,
     thumbnail.id,
-    categoryId
+    categoryId,
+    tagIds
   );
 
   usedTopics.push({ title: topicData.title, date: new Date().toISOString() });
