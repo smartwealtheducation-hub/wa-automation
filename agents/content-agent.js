@@ -267,8 +267,7 @@ async function main() {
   const tagIds = await resolveTags(article.tags);
 
   console.log("Generating thumbnail image...");
-  const thumbnail = await createArticleImage(topicData.title, topicData.topic);
-
+  const thumbnail = await createArticleImage(topicData.title, topicData.topic, article.tags);
   console.log("Pausing 25s before next upload to respect WordPress rate limits...");
   await sleep(25000);
 
