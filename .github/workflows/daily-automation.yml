@@ -33,6 +33,10 @@ jobs:
           WC_CONSUMER_SECRET: ${{ secrets.WC_CONSUMER_SECRET }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
+          YOUTUBE_PLAYLIST_GENERAL: ${{ secrets.YOUTUBE_PLAYLIST_GENERAL }}
+          YOUTUBE_PLAYLIST_AFFILIATE_MARKETING: ${{ secrets.YOUTUBE_PLAYLIST_AFFILIATE_MARKETING }}
+          YOUTUBE_PLAYLIST_AI_BUSINESS: ${{ secrets.YOUTUBE_PLAYLIST_AI_BUSINESS }}
+          YOUTUBE_PLAYLIST_PASSIVE_INCOME: ${{ secrets.YOUTUBE_PLAYLIST_PASSIVE_INCOME }}
       - name: Run Facebook agent
         run: npm run social
         env:
