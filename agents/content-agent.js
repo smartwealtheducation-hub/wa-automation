@@ -43,16 +43,6 @@ function loadUsedTopics() {
   }
 }
 
-// Returns true if any entry in used-topics.json was published on today's
-// UTC calendar date. This is what actually prevents duplicate articles when
-// the 09:00 and 13:00 UTC cron triggers (or a manual run) both fire on the
-// same day - the 13:00 run is only meant to catch a *failed* 09:00 run, not
-// to publish a second article on top of a successful one.
-function hasPublishedToday(usedTopics) {
-  const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD" in UTC
-  return usedTopics.some((t) => t.date && t.date.slice(0, 10) === today);
-}
-
 function saveUsedTopics(topics) {
   fs.writeFileSync(USED_TOPICS_FILE, JSON.stringify(topics, null, 2));
 }
@@ -71,6 +61,16 @@ function loadUsedVideos() {
 function saveUsedVideos(videoIds) {
   const trimmed = videoIds.slice(-20);
   fs.writeFileSync(USED_VIDEOS_FILE, JSON.stringify(trimmed, null, 2));
+}
+
+// Returns true if any entry in used-topics.json was published on today's
+// UTC calendar date. This is what actually prevents duplicate articles when
+// the 09:00 and 13:00 UTC cron triggers (or a manual run) both fire on the
+// same day - the 13:00 run is only meant to catch a *failed* 09:00 run, not
+// to publish a second article on top of a successful one.
+function hasPublishedToday(usedTopics) {
+  const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD" in UTC
+  return usedTopics.some((t) => t.date && t.date.slice(0, 10) === today);
 }
 
 function wpAuthHeader() {
@@ -445,11 +445,6 @@ function linkifyKeywordToWikipedia(bodyHtml, keyword, wiki) {
 
 // ---- YouTube video embed ----
 
-// The search.list endpoint has a known indexing delay - a freshly uploaded
-// video can take minutes to hours to appear there. The channel's "uploads"
-// playlist reflects new videos instantly and costs far less API quota, so
-// we use that instead: first resolve the playlist ID, then grab its most
-// recent item.
 async function getUploadsPlaylistId() {
   const url = `https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&id=${YOUTUBE_CHANNEL_ID}&part=contentDetails`;
 
@@ -659,8 +654,8 @@ async function main() {
 
   console.log("Generating thumbnail image...");
   const thumbnail = await createArticleImage(topicData.title, topicData.topic, article.tags);
-  console.log("Pausing 25s before next upload to respect WordPress rate limits...");
-  await sleep(25000);
+  console.log("Pausing 45s before next upload to respect WordPress rate limits...");
+  await sleep(45000);
 
   console.log("Generating in-article image 1...");
   const inline1 = await createInlineImage(
@@ -669,8 +664,8 @@ async function main() {
     1
   );
 
-  console.log("Pausing 25s before next upload to respect WordPress rate limits...");
-  await sleep(25000);
+  console.log("Pausing 45s before next upload to respect WordPress rate limits...");
+  await sleep(45000);
 
   console.log("Generating in-article image 2...");
   const inline2 = await createInlineImage(
