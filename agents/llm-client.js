@@ -3,16 +3,26 @@
 // models/settings.
 //
 // Uses gemini-3.5-flash-lite as the primary model (highest free daily
-// request allowance), with gemini-2.5-flash as an automatic fallback if the
-// primary model is down. Google's free-tier models occasionally experience
-// widespread 503 "high demand" outages lasting hours (a known, recurring,
-// publicly-reported issue, not specific to this account) - falling back to
-// a different model avoids losing an entire day's automation to it.
+// request allowance), with two automatic fallbacks if the primary model is
+// down: gemini-3.8-flash, then gemini-3.1-flash-lite. Google's free-tier
+// models occasionally experience widespread 503 "high demand" outages
+// lasting hours (a known, recurring, publicly-reported issue, not specific
+// to this account) - falling back to a different model avoids losing an
+// entire day's automation to it.
+//
+// NOTE (2026-09-30): the previous fallback, gemini-2.5-flash, was removed
+// because Google is fully shutting down the entire Gemini 2.5 model family
+// on 16 October 2026 - it was already returning 404s for new callers before
+// that date. gemini-3.1-flash-lite is confirmed stable with no deprecation
+// date as of this writing. If either fallback starts erroring in the
+// future, check Google's Gemini API model list for current model names
+// before re-adding a replacement, rather than assuming this list stays
+// correct indefinitely.
 //
 // Includes automatic retries with backoff for transient errors (429 rate
 // limit, 500/503 server overload) on each model before moving to the next.
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const MODELS = ["gemini-3.5-flash-lite", "gemini-2.5-flash"];
+const MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-flash-lite"];
 const MAX_RETRIES_PER_MODEL = 3;
 const RETRY_STATUS_CODES = [429, 500, 502, 503, 504];
 
