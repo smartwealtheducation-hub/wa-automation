@@ -17,12 +17,23 @@
 // Each image makes ONE WordPress API call (alt_text passed as a query param
 // on the same upload request). Includes automatic retries with backoff for
 // transient errors (429, 500-504) on both image generation and WordPress calls.
+//
+// NOTE (2026-09-30): MAX_RETRIES and the backoff multiplier were increased
+// after observing WordPress return persistent 429 "Too Many Requests" on
+// media uploads even with a 25s (now 45s) pause between images and the
+// previous 30/60/90s backoff - the host/security layer's rate-limit window
+// appears to be longer than that. If 429s on media uploads keep happening
+// even with this more patient backoff, it likely means the host (or a
+// security plugin like Wordfence, or a firewall like Cloudflare) enforces a
+// hard requests-per-minute cap on the REST API that no amount of
+// script-side patience can fully outlast - worth checking with the hosting
+// provider or the site's security plugin settings directly in that case.
 import sharp from "sharp";
 
 const { WP_SITE_URL, WP_USERNAME, WP_APP_PASSWORD, POLLINATIONS_API_KEY } =
   process.env;
 
-const MAX_RETRIES = 4;
+const MAX_RETRIES = 5;
 const RETRY_STATUS_CODES = [429, 500, 502, 503, 504];
 
 function sleep(ms) {
@@ -42,7 +53,7 @@ async function fetchWithRetry(url, options, label) {
       RETRY_STATUS_CODES.includes(res.status) && attempt < MAX_RETRIES;
     if (!shouldRetry) throw lastError;
 
-    const waitMs = attempt * 30000;
+    const waitMs = attempt * 45000;
     console.log(
       `${label} returned ${res.status} (attempt ${attempt}/${MAX_RETRIES}) - retrying in ${waitMs / 1000}s...`
     );
