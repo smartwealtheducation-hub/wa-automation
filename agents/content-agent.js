@@ -351,10 +351,45 @@ async function getStoreProducts(count = 5) {
   const shuffled = [...products].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count).map((p) => ({
     name: p.name,
-    price: p.price_html ? p.price_html.replace(/<[^>]*>/g, "") : p.price,
+    priceHtml: cleanPriceHtml(p.price_html, p.price),
     url: p.permalink,
     image: p.images?.[0]?.src || null,
   }));
+}
+
+// Turn HTML entities such as &pound; / &#163; / &amp; into real characters.
+function decodeEntities(text) {
+  const named = {
+    pound: "£", euro: "€", yen: "¥", cent: "¢", dollar: "$",
+    amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+    ndash: "–", mdash: "—",
+  };
+  return String(text || "").replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, e) => {
+    if (e[0] === "#") {
+      const code = e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : m;
+    }
+    return named[e.toLowerCase()] ?? m;
+  });
+}
+
+// Build a clean, safe price: real £ symbol, no hidden "Original price was:" text.
+// On-sale products show the old price struck through, then the current price.
+function cleanPriceHtml(priceHtml, fallbackPrice) {
+  if (!priceHtml) return escapeHtml(fallbackPrice || "");
+  const text = (html) =>
+    decodeEntities(
+      html
+        .replace(/<span[^>]*screen-reader-text[^>]*>[\s\S]*?<\/span>/gi, "")
+        .replace(/<[^>]*>/g, "")
+    ).replace(/\s+/g, " ").trim();
+
+  const del = priceHtml.match(/<del[^>]*>([\s\S]*?)<\/del>/i);
+  const ins = priceHtml.match(/<ins[^>]*>([\s\S]*?)<\/ins>/i);
+  if (del && ins) {
+    return `<span style="text-decoration:line-through;opacity:.6;margin-right:6px;">${escapeHtml(text(del[1]))}</span><strong>${escapeHtml(text(ins[1]))}</strong>`;
+  }
+  return escapeHtml(text(priceHtml));
 }
 
 function buildProductShowcaseHtml(products, heading = "") {
@@ -366,7 +401,7 @@ function buildProductShowcaseHtml(products, heading = "") {
     <div style="flex:1;min-width:180px;max-width:220px;border:1px solid #e0e0e0;border-radius:8px;padding:12px;text-align:center;">
       ${p.image ? `<img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}" style="max-width:100%;height:auto;border-radius:6px;margin-bottom:8px;" />` : ""}
       <p style="font-weight:600;margin:8px 0 4px;">${escapeHtml(p.name)}</p>
-      <p style="margin:0 0 10px;">${escapeHtml(p.price)}</p>
+      <p style="margin:0 0 10px;">${p.priceHtml}</p>
       <a href="${escapeHtml(p.url)}" style="display:inline-block;padding:8px 16px;background:#2271b1;color:#fff;text-decoration:none;border-radius:4px;">Shop Now</a>
     </div>`
     )
